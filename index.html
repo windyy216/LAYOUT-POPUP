@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chỉnh layout chợ trong nhà Helio</title>
+<style>
+:root{
+  --bg:#f6f5f2; --panel:#ffffff; --ink:#1d1d1f; --mute:#6b6b70; --line:#e3e1dc;
+  --acc:#0b7d8c; --acc2:#e8f4f5; --warn:#c62f2f; --gold:#e8aa00;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+#app{display:grid;grid-template-columns:240px 1fr 270px;grid-template-rows:auto 1fr;height:100vh}
+header{grid-column:1/4;display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);
+  border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:15px;margin:0 10px 0 0;font-weight:700;white-space:nowrap}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;color:var(--ink);white-space:nowrap}
+.btn:hover{border-color:#c9c6bf;background:#fafaf8}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.danger{color:var(--warn)}
+.btn.on{background:var(--acc2);border-color:var(--acc);color:var(--acc)}
+.sep{width:1px;height:24px;background:var(--line);margin:0 2px}
+#status{margin-left:auto;font-size:12px;color:var(--mute);white-space:nowrap}
+#status.ok{color:#1f7a3a}#status.err{color:var(--warn)}
+aside{background:var(--panel);overflow:auto;padding:12px}
+aside.left{border-right:1px solid var(--line)}
+aside.right{border-left:1px solid var(--line)}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:14px 0 8px}
+h2:first-child{margin-top:0}
+.pal{display:grid;gap:6px}
+.pal button{justify-content:flex-start;width:100%;white-space:normal;text-align:left}
+.sw{width:14px;height:14px;border-radius:3px;flex:none;display:inline-block}
+label.f{display:block;font-size:12px;color:var(--mute);margin:8px 0 3px}
+select,input[type=text],input[type=number]{width:100%;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:#fff}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cnt{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.cnt b{margin-left:auto;font-variant-numeric:tabular-nums}
+.tot{display:flex;justify-content:space-between;font-weight:700;font-size:16px;padding:10px 0 4px}
+.muted{color:var(--mute);font-size:12px}
+.warnbox{background:#fdecec;color:var(--warn);border-radius:8px;padding:8px 10px;font-size:12px;margin-top:10px}
+#stage{position:relative;overflow:hidden;background:#e9e7e2;touch-action:none}
+#svg{width:100%;height:100%;display:block;cursor:grab;user-select:none;-webkit-user-select:none}
+#svg.panning{cursor:grabbing}
+.item{cursor:move}
+.hint{position:absolute;left:10px;bottom:10px;background:rgba(255,255,255,.92);border:1px solid var(--line);
+  border-radius:8px;padding:6px 10px;font-size:12px;color:var(--mute);pointer-events:none;max-width:calc(100% - 20px)}
+.zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:4px}
+.zoom .btn{width:34px;height:34px;justify-content:center;padding:0;font-size:18px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10}
+.modal.show{display:flex}
+.modal .box{background:#fff;border-radius:12px;padding:18px;max-width:380px;width:calc(100% - 32px)}
+.modal .box p{margin:0 0 14px}
+.modal .acts{display:flex;gap:8px;justify-content:flex-end}
+@media (max-width:900px){
+  #app{grid-template-columns:1fr;grid-template-rows:auto 55vh auto auto;height:auto}
+  header{grid-column:1}
+  #stage{height:55vh}
+  aside.left{border-right:0;border-top:1px solid var(--line)}
+  aside.right{border-left:0;border-top:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <h1>Layout chợ trong nhà · Helio</h1>
+  <button class="btn" id="bUndo" title="Hoàn tác (Ctrl+Z)">↶ Hoàn tác</button>
+  <button class="btn" id="bRedo" title="Làm lại (Ctrl+Y)">↷ Làm lại</button>
+  <span class="sep"></span>
+  <button class="btn" id="bRot" title="Xoay 90° (R)">⟳ Xoay</button>
+  <button class="btn" id="bFace" title="Đổi mặt tiền (F)">⇄ Đổi mặt tiền</button>
+  <button class="btn" id="bDup" title="Nhân bản (Ctrl+D)">⧉ Nhân bản</button>
+  <button class="btn danger" id="bDel" title="Xóa (Delete)">✕ Xóa</button>
+  <span class="sep"></span>
+  <button class="btn on" id="bRoute">Luồng khách</button>
+  <button class="btn on" id="bMeasure">Đo khoảng cách</button>
+  <button class="btn on" id="bDims">Kích thước dãy</button>
+  <button class="btn" id="bRenum" title="Đánh số lại theo vị trí">Đánh số lại</button>
+  <span class="sep"></span>
+  <button class="btn primary" id="bPng">Tải ảnh PNG</button>
+  <button class="btn" id="bReset">Về bản gốc</button>
+  <span id="status">Đang tải…</span>
+</header>
+
+<aside class="left">
+  <h2>Thêm ô mới</h2>
+  <label class="f">Nhóm ngành của gian mới</label>
+  <select id="addCat"></select>
+  <div class="pal" style="margin-top:8px">
+    <button class="btn primary" data-add="booth">＋ Gian 1,5 × 2 m (nhóm đã chọn)</button>
+    <div class="row2"><div><label class="f">Ngang (m)</label><input type="number" id="cW" step="0.1" min="0.5" value="3"></div>
+    <div><label class="f">Sâu (m)</label><input type="number" id="cH" step="0.1" min="0.5" value="2"></div></div>
+    <button class="btn" data-add="custom">＋ Gian tự chọn kích thước</button>
+    <button class="btn" data-add="big"><span class="sw" style="background:#C48C00"></span>Gian lớn 3,5 × 3 m</button>
+    <button class="btn" data-add="decor"><span class="sw" style="background:#0E93A0;border-radius:50%"></span>Điểm check-in / decor</button>
+  </div>
+  <p class="muted" style="margin-top:12px">Ô mới hiện ở giữa màn hình. Kéo nó vào chỗ bạn muốn.</p>
+  <h2>Thao tác nhanh</h2>
+  <div class="muted">
+    Kéo ô: di chuyển (bắt lưới 10 cm)<br>
+    Shift + bấm: chọn thêm ô<br>
+    Shift + kéo nền: chọn cả vùng<br>
+    Kéo nền: dời bản vẽ · Lăn chuột: phóng to<br>
+    Phím mũi tên: dịch 10 cm (Shift: 50 cm)<br>
+    Delete: xóa · R: xoay · F: đổi mặt tiền
+  </div>
+</aside>
+
+<div id="stage">
+  <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="#00788c"/>
+      </marker>
+      <pattern id="hatch" width="0.3" height="0.3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2="0.3" stroke="#1E5CB7" stroke-width="0.06" opacity=".45"/>
+      </pattern>
+    </defs>
+    <g id="world">
+      <image id="bgimg" x="0" y="0"/>
+      <g id="legend"></g>
+      <g id="routes"></g>
+      <g id="items"></g>
+      <g id="dims"></g>
+      <g id="measure"></g>
+      <g id="selbox"></g>
+    </g>
+  </svg>
+  <div class="hint" id="hint">Bấm vào ô để chọn. Kéo để di chuyển.</div>
+  <div class="zoom">
+    <button class="btn" id="zIn">+</button>
+    <button class="btn" id="zOut">−</button>
+    <button class="btn" id="zFit" title="Xem toàn bộ">⤢</button>
+  </div>
+</div>
+
+<aside class="right">
+  <h2>Ô đang chọn</h2>
+  <div id="props"><p class="muted">Chưa chọn ô nào.</p></div>
+  <h2>Đếm gian hàng</h2>
+  <div id="counts"></div>
+  <div id="warn"></div>
+</aside>
+</div>
+
+<div class="modal" id="modal"><div class="box">
+  <p id="mText"></p>
+  <div class="acts"><button class="btn" id="mNo">Hủy</button><button class="btn primary" id="mYes">Đồng ý</button></div>
+</div></div>
+
+<script>
+(() => {
+const CATS = {
+  LN:{n:'Lưu niệm độc đáo',c:'#F37427'}, TT:{n:'Thời trang, secondhand',c:'#D62365'},
+  DA:{n:'Đồ ăn mang về',c:'#228C46'}, KG:{n:'Ký gửi lưu niệm',c:'#6C3E16'},
+  TG:{n:'Dịch vụ tương tác',c:'#623294'}, GM:{n:'Game / PR',c:'#1E5CB7'},
+  GL:{n:'Gian lớn',c:'#C48C00'}, DC:{n:'Check-in / decor',c:'#0E93A0'}
+};
+const TYPES = {
+  booth:{w:1.5,h:2,cat:null,unit:'gian'},
+  table:{w:2,h:1,cat:null,unit:'bàn'}, shelf:{w:2,h:1.5,cat:null,unit:'bàn'},
+  fashion:{w:3,h:2,cat:'TT',unit:'gian'}, service:{w:2.5,h:2,cat:'TG',unit:'gian'},
+  game:{w:3,h:3,cat:'GM',unit:'gian'}, big:{w:3.5,h:3,cat:'GL',unit:'gian'},
+  decor:{w:2.6,h:2.6,cat:'DC',unit:''}
+};
+const FACES = ['N','E','S','W'];
+const FACE_VI = {N:'Hướng lên (Bắc)',E:'Hướng phải (Đông)',S:'Hướng xuống (Nam)',W:'Hướng trái (Tây)'};
+const SNAP = 0.1, DOC = 'layout/v3', LSKEY = 'helio-layout-v3';
+const NS = 'http://www.w3.org/2000/svg';
+
+const $ = id => document.getElementById(id);
+const svg = $('svg'), world = $('world'), gItems = $('items'), gMeasure = $('measure'),
+      gRoutes = $('routes'), gSel = $('selbox'), gLegend = $('legend'), gDims = $('dims');
+
+let PLAN = {W:92.87, H:93.09}, routes = [], items = [], original = [];
+let sel = new Set(), hist = [], fut = [];
+let view = {x:0, y:14, w:72, h:76};
+let showRoute = true, showMeasure = true, showDims = true, REF = null;
+let db = null, saveTimer = null, saving = false, pendingSave = false, dbWritable = true;
+let bgDataURL = null;
+
+function el(tag, attrs, parent){ const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function uid(){ return Math.random().toString(36).slice(2, 9); }
+function r1(v){ return Math.round(v*100)/100; }
+function snap(v){ return Math.round(v/SNAP)*SNAP; }
+function fmt(v){ return (Math.round(v*10)/10).toLocaleString('vi-VN'); }
+function tint(hex, k){ const n = parseInt(hex.slice(1),16); const c=[n>>16,(n>>8)&255,n&255].map(v=>Math.round(v+(255-v)*k));
+  return `rgb(${c.join(',')})`; }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+/* ---------------- view ---------------- */
+function applyView(){
+  const r = svg.getBoundingClientRect(); if (!r.width) return;
+  const ar = r.width / r.height;
+  if (view.w / view.h > ar) view.h = view.w / ar; else view.w = view.h * ar;
+  svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+}
+function toWorld(cx, cy){ const p = svg.createSVGPoint(); p.x = cx; p.y = cy;
+  return p.matrixTransform(svg.getScreenCTM().inverse()); }
+function zoomAt(f, cx, cy){
+  const p = toWorld(cx, cy); const nw = Math.min(Math.max(view.w*f, 6), 140);
+  const k = nw / view.w; view.x = p.x - (p.x - view.x)*k; view.y = p.y - (p.y - view.y)*k;
+  view.w = nw; view.h *= k; applyView();
+}
+function fit(){ view = {x:-1, y:12, w:PLAN.W*0.8, h:PLAN.H*0.86}; applyView(); }
+
+/* ---------------- rendering ---------------- */
+function frontRect(it, d){ // strip of depth d along the front side
+  const {x,y,w,h,face} = it;
+  if (face==='N') return [x, y, w, d];
+  if (face==='S') return [x, y+h-d, w, d];
+  if (face==='W') return [x, y, d, h];
+  return [x+w-d, y, d, h];
+}
+function backRect(it, d){ const o = {N:'S',S:'N',E:'W',W:'E'}[it.face]; return frontRect({...it, face:o}, d); }
+function vertical(it){ return it.face==='E' || it.face==='W'; }
+
+function label(g, it, cx, cy, size, fill, weight){
+  const t = el('text', {x:cx, y:cy, 'font-size':size, 'text-anchor':'middle', 'dominant-baseline':'central',
+    fill, 'font-weight':weight||700, 'font-family':'Arial, Helvetica, sans-serif'}, g);
+  const tall = it.h > it.w*1.15 && it.type!=='decor';
+  if (tall) t.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
+  t.textContent = it.label || '';
+  return t;
+}
+
+function drawItem(it, parent){
+  const c = CATS[it.cat] ? CATS[it.cat].c : '#888';
+  const g = el('g', {class:'item', 'data-id':it.id}, parent);
+  const {x,y,w,h} = it;
+  if (it.type==='booth'){
+    el('rect', {x, y, width:w, height:h, fill:tint(c,.86), stroke:c, 'stroke-width':0.05}, g);
+    const v = vertical(it), tl = Math.min(1.2, (v ? h : w) - 0.2), td = 0.6;
+    let tb, ch;
+    if (!v){ const tx0 = x + w/2 - tl/2; tb = it.face==='N' ? [tx0, y+0.1, tl, td] : [tx0, y+h-0.1-td, tl, td];
+      ch = [x + w/2, it.face==='N' ? y+h-0.45 : y+0.45]; }
+    else { const ty0 = y + h/2 - tl/2; tb = it.face==='W' ? [x+0.1, ty0, td, tl] : [x+w-0.1-td, ty0, td, tl];
+      ch = [it.face==='W' ? x+w-0.45 : x+0.45, y + h/2]; }
+    el('rect', {x:tb[0], y:tb[1], width:tb[2], height:tb[3], fill:c, rx:0.04}, g);
+    el('circle', {cx:ch[0], cy:ch[1], r:0.2, fill:tint(c,.45), stroke:c, 'stroke-width':0.04}, g);
+    label(g, {...it, w:tb[2], h:tb[3]}, tb[0]+tb[2]/2, tb[1]+tb[3]/2, 0.32, '#fff');
+  } else if (it.type==='decor'){
+    el('ellipse', {cx:x+w/2, cy:y+h/2, rx:w/2, ry:h/2, fill:tint(c,.6), stroke:c, 'stroke-width':0.12}, g);
+    label(g, it, x+w/2, y+h/2, 0.42, '#0a5a62');
+  } else if (it.type==='table' || it.type==='shelf'){
+    el('rect', {x, y, width:w, height:h, fill:tint(c,.9), stroke:'#b9b6ae', 'stroke-width':0.04}, g);
+    const fr = frontRect(it, 0.6);
+    el('rect', {x:fr[0], y:fr[1], width:fr[2], height:fr[3], fill:c, stroke:tint(c,-0)}, g);
+    if (it.type==='shelf'){ const br = backRect(it, 0.5);
+      el('rect', {x:br[0], y:br[1], width:br[2], height:br[3], fill:tint(c,.65)}, g); }
+    const ch = frontRect(it, 0.8), cc = vertical(it) ? [ (it.face==='W'? x+0.8 : x+w-0.8), y+h/2 ] : [x+w/2, (it.face==='N'? y+0.8 : y+h-0.8)];
+    el('circle', {cx:cc[0], cy:cc[1], r:0.17, fill:tint(c,.45), stroke:c, 'stroke-width':0.04}, g);
+    label(g, it, fr[0]+fr[2]/2, fr[1]+fr[3]/2, 0.4, '#fff');
+  } else if (it.type==='fashion'){
+    el('rect', {x, y, width:w, height:h, fill:tint(c,.84), stroke:c, 'stroke-width':0.05}, g);
+    const k = 0.35, sw = 0.16;
+    const back = backRect(it, k);
+    const ln = (x1,y1,x2,y2)=>el('line',{x1,y1,x2,y2,stroke:c,'stroke-width':sw,'stroke-linecap':'round'},g);
+    if (!vertical(it)){
+      const yb = it.face==='N' ? y+h-k : y+k;
+      ln(x+0.15, yb, x+w-0.15, yb);
+      const y0 = it.face==='N' ? y+0.5 : y+k, y1 = it.face==='N' ? y+h-k : y+h-0.5;
+      ln(x+0.22, y0, x+0.22, y1); ln(x+w-0.22, y0, x+w-0.22, y1);
+    } else {
+      const xb = it.face==='W' ? x+w-k : x+k;
+      ln(xb, y+0.15, xb, y+h-0.15);
+      const x0 = it.face==='W' ? x+0.5 : x+k, x1 = it.face==='W' ? x+w-k : x+w-0.5;
+      ln(x0, y+0.22, x1, y+0.22); ln(x0, y+h-0.22, x1, y+h-0.22);
+    }
+    label(g, it, x+w/2, y+h/2, 0.5, tint(c,-0.2));
+  } else if (it.type==='service'){
+    el('rect', {x, y, width:w, height:h, fill:tint(c,.86), stroke:c, 'stroke-width':0.05}, g);
+    const cx = x+w/2, cy = y+h/2;
+    if (!vertical(it)){ el('rect',{x:cx-0.55,y:cy-0.3,width:1.1,height:0.6,fill:c},g);
+      [[cx,cy-0.62],[cx,cy+0.62]].forEach(p=>el('circle',{cx:p[0],cy:p[1],r:0.17,fill:tint(c,.45),stroke:c,'stroke-width':0.04},g));
+      label(g, {...it, h:0.6, w:1.1}, cx, cy, 0.34, '#fff');
+    } else { el('rect',{x:cx-0.3,y:cy-0.55,width:0.6,height:1.1,fill:c},g);
+      [[cx-0.62,cy],[cx+0.62,cy]].forEach(p=>el('circle',{cx:p[0],cy:p[1],r:0.17,fill:tint(c,.45),stroke:c,'stroke-width':0.04},g));
+      label(g, {...it, h:1.1, w:0.6}, cx, cy, 0.34, '#fff');
+    }
+  } else if (it.type==='game'){
+    // queue zone in front (not part of the booth footprint)
+    const q = 1.5, {face} = it;
+    const qr = face==='N'? [x, y-q, w, q] : face==='S'? [x, y+h, w, q] : face==='W'? [x-q, y, q, h] : [x+w, y, q, h];
+    el('rect', {x:qr[0], y:qr[1], width:qr[2], height:qr[3], fill:'url(#hatch)', stroke:tint(c,.4), 'stroke-width':0.04, 'stroke-dasharray':'0.2 0.15'}, g);
+    el('rect', {x, y, width:w, height:h, fill:tint(c,.8), stroke:c, 'stroke-width':0.07}, g);
+    const br = backRect(it, 0.7);
+    el('rect', {x:br[0], y:br[1], width:br[2], height:br[3], fill:c}, g);
+    label(g, {...it, w:1, h:0}, x+w/2, y+h/2, 0.5, tint(c,-0.3));
+  } else if (it.type==='big'){
+    el('rect', {x, y, width:w, height:h, fill:tint(c,.55), stroke:tint(c,-0.3), 'stroke-width':0.1}, g);
+    const fr = frontRect(it, 0.12); el('rect', {x:fr[0], y:fr[1], width:fr[2], height:fr[3], fill:tint(c,-0.4)}, g);
+    label(g, {...it, w:1, h:0, label:'GIAN LỚN'}, x+w/2, y+h/2-0.3, 0.45, '#5a4100');
+    label(g, {...it, w:1, h:0, label:`${fmt(w)} × ${fmt(h)} m`}, x+w/2, y+h/2+0.35, 0.34, '#5a4100', 400);
+    const t2 = el('text', {x:x+w/2, y:y-0.45, 'font-size':0.32, 'text-anchor':'middle', fill:'#5a4100', 'font-family':'Arial', 'font-weight':700}, g);
+    t2.textContent = it.label || '';
+  }
+  if (it.A){
+    el('rect', {x:x-0.12, y:y-0.12, width:w+0.24, height:h+0.24, fill:'none', stroke:'#e8aa00', 'stroke-width':0.16, rx:0.05}, g);
+    el('circle', {cx:x+w, cy:y, r:0.33, fill:'#e8aa00', stroke:'#7a5600', 'stroke-width':0.04}, g);
+    const t = el('text', {x:x+w, y:y, 'font-size':0.38, 'text-anchor':'middle', 'dominant-baseline':'central', fill:'#fff', 'font-weight':700, 'font-family':'Arial'}, g);
+    t.textContent = 'A';
+  }
+  return g;
+}
+
+function overlaps(){
+  const bad = new Set();
+  const solid = items.filter(i => i.type !== 'decor');
+  for (let i=0;i<solid.length;i++) for (let j=i+1;j<solid.length;j++){
+    const a = solid[i], b = solid[j];
+    if (a.x < b.x+b.w-0.03 && b.x < a.x+a.w-0.03 && a.y < b.y+b.h-0.03 && b.y < a.y+a.h-0.03){ bad.add(a.id); bad.add(b.id); }
+  }
+  return bad;
+}
+
+function render(){
+  gItems.textContent = '';
+  const bad = overlaps();
+  for (const it of items){
+    const g = drawItem(it, gItems);
+    if (bad.has(it.id)) el('rect', {x:it.x-0.08, y:it.y-0.08, width:it.w+0.16, height:it.h+0.16, fill:'none', stroke:'#c62f2f', 'stroke-width':0.1, 'stroke-dasharray':'0.3 0.18'}, g);
+    if (sel.has(it.id)) el('rect', {x:it.x-0.2, y:it.y-0.2, width:it.w+0.4, height:it.h+0.4, fill:'rgba(11,125,140,.08)', stroke:'#0b7d8c', 'stroke-width':0.12, rx:0.1}, g);
+  }
+  renderRoutes(); renderDims(); renderMeasure(); renderCounts(bad); renderProps(); renderLegend();
+  $('bUndo').disabled = !hist.length; $('bRedo').disabled = !fut.length;
+  ['bRot','bFace','bDup','bDel'].forEach(b => $(b).disabled = !sel.size);
+}
+
+function renderRoutes(){
+  gRoutes.textContent = '';
+  if (!showRoute) return;
+  for (const pts of routes){
+    const ext = [];
+    pts.forEach((p,i) => { if (i){ const q = pts[i-1]; ext.push([(p[0]+q[0])/2, (p[1]+q[1])/2]); } ext.push(p); });
+    el('polyline', {points: ext.map(p=>p.join(',')).join(' '), fill:'none', stroke:'#00a0b0', 'stroke-width':0.26,
+      'stroke-dasharray':'0.7 0.5', opacity:.75, 'marker-mid':'url(#arr)', 'pointer-events':'none'}, gRoutes);
+  }
+}
+
+function dimLine(x1,y1,x2,y2,txt,col,size){
+  col = col || '#555'; size = size || 0.32;
+  el('line',{x1,y1,x2,y2,stroke:col,'stroke-width':0.035,'stroke-dasharray':'0.18 0.12','pointer-events':'none'},gDims);
+  const ang = Math.atan2(y2-y1, x2-x1), nx = -Math.sin(ang)*0.22, ny = Math.cos(ang)*0.22;
+  [[x1,y1],[x2,y2]].forEach(p => el('line',{x1:p[0]-nx,y1:p[1]-ny,x2:p[0]+nx,y2:p[1]+ny,stroke:col,'stroke-width':0.05},gDims));
+  const tx=(x1+x2)/2, ty=(y1+y2)/2, vert = Math.abs(y2-y1) > Math.abs(x2-x1);
+  const t = el('text',{x:tx,y:ty,'font-size':size,'text-anchor':'middle','dominant-baseline':'central',fill:col,
+    'font-family':'Arial, Helvetica, sans-serif','font-weight':700,stroke:'#fff','stroke-width':size*0.3,'paint-order':'stroke'},gDims);
+  if (vert) t.setAttribute('transform',`rotate(-90 ${tx} ${ty})`);
+  t.textContent = txt;
+}
+function renderDims(){
+  gDims.textContent = '';
+  if (REF){ const [a,b,len] = REF;
+    // thin dashed reference between the two columns the user measured
+    el('line',{x1:a[0]-1.0,y1:a[1],x2:a[0],y2:a[1],stroke:'#c62f2f','stroke-width':0.03},gDims);
+    el('line',{x1:b[0]-1.0,y1:b[1],x2:b[0],y2:b[1],stroke:'#c62f2f','stroke-width':0.03},gDims);
+    dimLine(a[0]-0.8, a[1], b[0]-0.8, b[1], `${len.toLocaleString('vi-VN',{minimumFractionDigits:2})} m – 2 cột, đo thực tế`, '#c62f2f', 0.36);
+  }
+  if (!showDims) return;
+  const back = it => ({N:it.y+it.h, S:it.y, W:it.x+it.w, E:it.x})[it.face];
+  const pool = items.filter(i => i.type!=='decor');
+  const done = new Set();
+  for (const a of pool){
+    if (done.has(a.id)) continue;
+    const hz = !vertical(a);
+    const s0 = hz ? (i=>i.x) : (i=>i.y), s1 = hz ? (i=>i.x+i.w) : (i=>i.y+i.h);
+    const row = pool.filter(b => !done.has(b.id) && b.face===a.face && Math.abs(back(b)-back(a)) < 0.15).sort((p,q) => s0(p)-s0(q));
+    const chains = []; let cur = [];
+    for (const it of row){ if (cur.length && s0(it) - s1(cur[cur.length-1]) > 1.6){ chains.push(cur); cur = []; } cur.push(it); }
+    if (cur.length) chains.push(cur);
+    const mine = chains.find(c => c.includes(a)); mine.forEach(i => done.add(i.id));
+    const start = Math.min(...mine.map(s0)), end = Math.max(...mine.map(s1));
+    const dep = hz ? Math.max(...mine.map(i=>i.h)) : Math.max(...mine.map(i=>i.w));
+    const off = 0.5; let pos;
+    if (a.face==='N') pos = Math.min(...mine.map(i=>i.y)) - off;
+    else if (a.face==='S') pos = Math.max(...mine.map(i=>i.y+i.h)) + off;
+    else if (a.face==='W') pos = Math.min(...mine.map(i=>i.x)) - off;
+    else pos = Math.max(...mine.map(i=>i.x+i.w)) + off;
+    const n = mine.length, mw = hz ? mine[0].w : mine[0].h;
+    const same = mine.every(i => Math.abs((hz?i.w:i.h)-mw) < 0.05 && Math.abs((hz?i.h:i.w)-dep) < 0.05);
+    const txt = `${fmt(end-start)} m · ${n} gian` + (same ? ` (${fmt(mw)} × ${fmt(dep)} m)` : '');
+    const out = (a.face==='N'||a.face==='W') ? -1 : 1;
+    if (hz) dimLine(start, pos, end, pos, txt, '#444'); else dimLine(pos, start, pos, end, txt, '#444');
+    for (let i=1;i<mine.length;i++){
+      const g0 = s1(mine[i-1]), g1 = s0(mine[i]), gp = g1-g0; if (gp < 0.05) continue;
+      const m = (g0+g1)/2, q = pos + out*0.42;
+      const t = el('text', hz ? {x:m, y:q} : {x:q, y:m}, gDims);
+      t.setAttribute('font-size',0.26); t.setAttribute('text-anchor','middle'); t.setAttribute('dominant-baseline','central');
+      t.setAttribute('fill','#0b7d8c'); t.setAttribute('font-family','Arial'); t.setAttribute('font-weight',700);
+      if (!hz) t.setAttribute('transform',`rotate(-90 ${q} ${m})`);
+      t.textContent = 'hở ' + fmt(gp);
+    }
+  }
+}
+function renderMeasure(){
+  gMeasure.textContent = '';
+  if (!showMeasure || sel.size !== 1) return;
+  const a = items.find(i => sel.has(i.id)); if (!a) return;
+  const others = items.filter(i => i.id !== a.id);
+  const dirs = [
+    {k:'E', test:b => b.x >= a.x+a.w-0.01 && b.y < a.y+a.h && b.y+b.h > a.y, gap:b => b.x-(a.x+a.w)},
+    {k:'W', test:b => b.x+b.w <= a.x+0.01 && b.y < a.y+a.h && b.y+b.h > a.y, gap:b => a.x-(b.x+b.w)},
+    {k:'S', test:b => b.y >= a.y+a.h-0.01 && b.x < a.x+a.w && b.x+b.w > a.x, gap:b => b.y-(a.y+a.h)},
+    {k:'N', test:b => b.y+b.h <= a.y+0.01 && b.x < a.x+a.w && b.x+b.w > a.x, gap:b => a.y-(b.y+b.h)},
+  ];
+  for (const d of dirs){
+    let best = null, bg = 12;
+    for (const b of others) if (d.test(b)){ const g = d.gap(b); if (g >= 0 && g < bg){ bg = g; best = b; } }
+    if (!best) continue;
+    let x1,y1,x2,y2;
+    if (d.k==='E'||d.k==='W'){
+      const yy = (Math.max(a.y,best.y) + Math.min(a.y+a.h, best.y+best.h))/2;
+      x1 = d.k==='E' ? a.x+a.w : best.x+best.w; x2 = d.k==='E' ? best.x : a.x; y1 = y2 = yy;
+    } else {
+      const xx = (Math.max(a.x,best.x) + Math.min(a.x+a.w, best.x+best.w))/2;
+      y1 = d.k==='S' ? a.y+a.h : best.y+best.h; y2 = d.k==='S' ? best.y : a.y; x1 = x2 = xx;
+    }
+    const col = bg < 0.5 ? '#c62f2f' : bg < 2.5 && bg > 1.3 ? '#d07a00' : '#0b7d8c';
+    el('line', {x1,y1,x2,y2, stroke:col, 'stroke-width':0.07}, gMeasure);
+    [[x1,y1],[x2,y2]].forEach(p => el('circle',{cx:p[0],cy:p[1],r:0.1,fill:col},gMeasure));
+    const tx = (x1+x2)/2, ty = (y1+y2)/2;
+    const s = fmt(bg)+' m';
+    const bw = 0.24*s.length + 0.3;
+    el('rect', {x:tx-bw/2, y:ty-0.3, width:bw, height:0.6, rx:0.15, fill:'#fff', stroke:col, 'stroke-width':0.05}, gMeasure);
+    const t = el('text', {x:tx, y:ty, 'font-size':0.38, 'text-anchor':'middle', 'dominant-baseline':'central', fill:col, 'font-weight':700, 'font-family':'Arial'}, gMeasure);
+    t.textContent = s;
+  }
+}
+
+function tally(){
+  const t = {}; let total = 0, A = 0;
+  for (const it of items){ if (it.type==='decor') continue; t[it.cat] = (t[it.cat]||0)+1; total++; if (it.A) A++; }
+  return {t, total, A};
+}
+function unitOf(cat){ return 'gian'; }
+
+function renderCounts(bad){
+  const {t, total, A} = tally();
+  let h = '';
+  for (const k of Object.keys(CATS)){ if (k==='DC') continue;
+    h += `<div class="cnt"><span class="sw" style="background:${CATS[k].c}"></span>${CATS[k].n}<b>${t[k]||0} ${unitOf(k)}</b></div>`; }
+  h += `<div class="tot"><span>Tổng</span><span>${total}</span></div>`;
+  h += `<div class="muted">Vị trí A (giá cao): <b>${A}</b></div>`;
+  $('counts').innerHTML = h;
+  $('warn').innerHTML = bad.size ? `<div class="warnbox">⚠ Có ${bad.size} ô đang chồng lên nhau (viền đỏ nét đứt).</div>` : '';
+}
+
+function renderLegend(){
+  gLegend.textContent = '';
+  const {t, total, A} = tally();
+  const x0 = 8.6, y0 = 52.6; let y = y0;
+  const tx = (x, y, s, size, w, fill) => { const e = el('text', {x, y, 'font-size':size, 'font-weight':w||400, fill:fill||'#1d1d1f', 'font-family':'Arial, Helvetica, sans-serif'}, gLegend); e.textContent = s; return e; };
+  tx(x0, y+1, 'BỐ CỤC CHỢ TRONG NHÀ', 1.15, 700); y += 2.6;
+  for (const k of Object.keys(CATS)){ if (k==='DC') continue;
+    el('rect', {x:x0, y:y-0.85, width:1.8, height:1.1, fill:CATS[k].c}, gLegend);
+    tx(x0+2.5, y, `${CATS[k].n} · ${t[k]||0} ${unitOf(k)}`, 0.85, 700); y += 1.75; }
+  y += 0.4; tx(x0, y, `TỔNG: ${total} gian/bàn  ·  Vị trí A: ${A}`, 1.0, 700); y += 2;
+  el('rect', {x:x0+0.1, y:y-0.85, width:1.6, height:1.0, fill:'none', stroke:'#e8aa00', 'stroke-width':0.16}, gLegend);
+  tx(x0+2.5, y, 'Vị trí A – giá cao: đầu dãy, đối diện cổng, quanh check-in', 0.7); y += 1.5;
+  el('line', {x1:x0, y1:y-0.3, x2:x0+1.8, y2:y-0.3, stroke:'#00a0b0', 'stroke-width':0.26, 'stroke-dasharray':'0.5 0.3'}, gLegend);
+  tx(x0+2.5, y, 'Luồng khách chính', 0.7); y += 1.5;
+  tx(x0, y, '1 gian = 1,5 m ngang × 2 m sâu (bàn + chỗ đứng + ghế)', 0.7, 400, '#555'); y += 1.2;
+  tx(x0, y, 'Tỉ lệ theo mốc 7,06 m giữa 2 cột ở sảnh (nét đứt đỏ)', 0.7, 400, '#c62f2f');
+}
+
+function renderProps(){
+  const box = $('props');
+  if (!sel.size){ box.innerHTML = '<p class="muted">Chưa chọn ô nào. Bấm vào một ô trên bản vẽ.</p>'; return; }
+  const list = items.filter(i => sel.has(i.id));
+  const catOpts = cur => Object.keys(CATS).map(k => `<option value="${k}" ${k===cur?'selected':''}>${k} – ${CATS[k].n}</option>`).join('');
+  if (list.length === 1){
+    const it = list[0];
+    box.innerHTML = `
+      <label class="f">Tên ô</label><input type="text" id="pLabel" value="${(it.label||'').replace(/"/g,'&quot;')}">
+      <label class="f">Nhóm ngành</label><select id="pCat">${catOpts(it.cat)}</select>
+      <div class="row2"><div><label class="f">Ngang (m)</label><input type="number" step="0.1" min="0.5" id="pW" value="${r1(it.w)}"></div>
+      <div><label class="f">Dọc (m)</label><input type="number" step="0.1" min="0.5" id="pH" value="${r1(it.h)}"></div></div>
+      <label class="f">Mặt tiền (phía khách đứng)</label><select id="pFace">${FACES.map(f=>`<option value="${f}" ${f===it.face?'selected':''}>${FACE_VI[f]}</option>`).join('')}</select>
+      <label class="f" style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" id="pA" ${it.A?'checked':''}> Vị trí A (giá cao)</label>
+      <p class="muted">Vị trí: ${fmt(it.x)}, ${fmt(it.y)} m · Diện tích ${fmt(it.w*it.h)} m²</p>`;
+    const commit = (fn) => { pushHist(); fn(); changed(); };
+    $('pLabel').onchange = e => commit(() => it.label = e.target.value.trim());
+    $('pCat').onchange = e => commit(() => it.cat = e.target.value);
+    $('pW').onchange = e => { const v = parseFloat(e.target.value); if (v>=0.5) commit(() => it.w = r1(v)); };
+    $('pH').onchange = e => { const v = parseFloat(e.target.value); if (v>=0.5) commit(() => it.h = r1(v)); };
+    $('pFace').onchange = e => commit(() => it.face = e.target.value);
+    $('pA').onchange = e => commit(() => it.A = e.target.checked);
+  } else {
+    const allA = list.every(i => i.A);
+    box.innerHTML = `<p><b>${list.length} ô</b> đang được chọn.</p>
+      <label class="f">Đổi nhóm ngành cho tất cả</label><select id="pCat"><option value="">— giữ nguyên —</option>${catOpts('')}</select>
+      <label class="f" style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" id="pA" ${allA?'checked':''}> Vị trí A (giá cao)</label>`;
+    $('pCat').onchange = e => { if (!e.target.value) return; pushHist(); list.forEach(i => i.cat = e.target.value); changed(); };
+    $('pA').onchange = e => { pushHist(); list.forEach(i => i.A = e.target.checked); changed(); };
+  }
+}
+
+/* ---------------- history & saving ---------------- */
+function pushHist(){ hist.push(JSON.stringify(items)); if (hist.length > 100) hist.shift(); fut = []; }
+function undo(){ if (!hist.length) return; fut.push(JSON.stringify(items)); items = JSON.parse(hist.pop()); pruneSel(); changed(); }
+function redo(){ if (!fut.length) return; hist.push(JSON.stringify(items)); items = JSON.parse(fut.pop()); pruneSel(); changed(); }
+function pruneSel(){ const ids = new Set(items.map(i => i.id)); for (const s of [...sel]) if (!ids.has(s)) sel.delete(s); }
+
+function setStatus(t, cls){ const s = $('status'); s.textContent = t; s.className = cls || ''; }
+function changed(){
+  render();
+  try { localStorage.setItem(LSKEY, JSON.stringify(items)); } catch(e){}
+  clearTimeout(saveTimer);
+  if (db && dbWritable){ setStatus('Chưa lưu…'); saveTimer = setTimeout(saveNow, 1200); }
+  else setStatus(db ? 'Chỉ lưu trên máy này' : 'Đã lưu trên máy này', '');
+}
+async function saveNow(){
+  if (!db || !dbWritable) return;
+  if (saving){ pendingSave = true; return; }
+  saving = true; setStatus('Đang lưu…');
+  try {
+    await db.doc(DOC).set({items: clone(items), updatedAt: new Date().toISOString()});
+    const t = new Date(); setStatus(`Đã lưu lúc ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`, 'ok');
+  } catch(e){
+    if (e && e.code === 'invalid_argument'){ dbWritable = false; setStatus('Bạn chỉ có quyền xem – không lưu được', 'err'); }
+    else if (e && e.code === 'unavailable'){ setTimeout(saveNow, 1500 + Math.random()*1500); }
+    else setStatus('Lưu chưa được – đã giữ trên máy', 'err');
+  } finally {
+    saving = false; if (pendingSave){ pendingSave = false; saveNow(); }
+  }
+}
+
+/* ---------------- actions ---------------- */
+function selected(){ return items.filter(i => sel.has(i.id)); }
+function delSel(){ if (!sel.size) return; pushHist(); items = items.filter(i => !sel.has(i.id)); sel.clear(); changed(); }
+function rotSel(){
+  if (!sel.size) return; pushHist();
+  for (const it of selected()){
+    const cx = it.x + it.w/2, cy = it.y + it.h/2; [it.w, it.h] = [it.h, it.w];
+    it.x = snap(cx - it.w/2); it.y = snap(cy - it.h/2);
+    it.face = FACES[(FACES.indexOf(it.face)+1) % 4];
+  }
+  changed();
+}
+function faceSel(){ if (!sel.size) return; pushHist(); for (const it of selected()) it.face = {N:'S',S:'N',E:'W',W:'E'}[it.face]; changed(); }
+function nextLabel(cat){
+  let n = 0; for (const it of items){ const m = (it.label||'').match(new RegExp('^'+cat+'(\\d+)$')); if (m) n = Math.max(n, +m[1]); }
+  return cat + String(n+1).padStart(2,'0');
+}
+function dupSel(){
+  if (!sel.size) return; pushHist(); const add = [];
+  for (const it of selected()){ const c = {...it, id:uid(), x:snap(it.x+0.5), y:snap(it.y+0.5)};
+    c.label = it.type==='decor' ? it.label : nextLabel(it.cat); items.push(c); add.push(c.id); }
+  sel = new Set(add); changed();
+}
+function addItem(type){
+  let T = TYPES[type];
+  if (type === 'custom'){ const cw = parseFloat($('cW').value), chh = parseFloat($('cH').value);
+    if (!(cw >= 0.5 && chh >= 0.5)) return; T = {w:r1(cw), h:r1(chh), cat:null}; type = 'booth'; }
+  const cat = T.cat || $('addCat').value;
+  pushHist();
+  const it = {id:uid(), type, cat, w:T.w, h:T.h, face:type==='game'?'E':'N', A:false,
+    x:snap(view.x + view.w/2 - T.w/2), y:snap(view.y + view.h/2 - T.h/2),
+    label: type==='decor' ? 'CHECK-IN' : nextLabel(cat)};
+  if (type==='big') it.face = 'W';
+  items.push(it); sel = new Set([it.id]); changed();
+}
+function renumber(){
+  pushHist();
+  const by = {};
+  for (const it of items){ if (it.type==='decor') continue; (by[it.cat] = by[it.cat] || []).push(it); }
+  for (const k in by){ by[k].sort((a,b) => (Math.round(a.y) - Math.round(b.y)) || (a.x - b.x));
+    by[k].forEach((it,i) => it.label = k + String(i+1).padStart(2,'0')); }
+  changed();
+}
+function confirmBox(text){ return new Promise(res => {
+  $('mText').textContent = text; $('modal').classList.add('show');
+  const done = v => { $('modal').classList.remove('show'); $('mYes').onclick = $('mNo').onclick = null; res(v); };
+  $('mYes').onclick = () => done(true); $('mNo').onclick = () => done(false);
+}); }
+
+/* ---------------- pointer interaction ---------------- */
+let drag = null; const pointers = new Map();
+svg.addEventListener('pointerdown', e => {
+  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if (pointers.size === 2){ drag = {mode:'pinch', d0:pinchDist(), v0:{...view}}; return; }
+  const g = e.target.closest('.item');
+  const p = toWorld(e.clientX, e.clientY);
+  if (g){
+    const id = g.getAttribute('data-id');
+    if (e.shiftKey || e.ctrlKey || e.metaKey){ sel.has(id) ? sel.delete(id) : sel.add(id); render(); return; }
+    if (!sel.has(id)){ sel = new Set([id]); render(); }
+    drag = {mode:'move', p0:p, start: selected().map(i => ({it:i, x:i.x, y:i.y})), moved:false, snapshot:JSON.stringify(items)};
+  } else if (e.shiftKey){
+    drag = {mode:'box', p0:p};
+  } else {
+    drag = {mode:'pan', c0:{x:e.clientX, y:e.clientY}, v0:{...view}, moved:false};
+    svg.classList.add('panning');
+  }
+  svg.setPointerCapture(e.pointerId);
+});
+function pinchDist(){ const [a,b] = [...pointers.values()]; return Math.hypot(a.x-b.x, a.y-b.y); }
+svg.addEventListener('pointermove', e => {
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if (!drag) return;
+  if (drag.mode === 'pinch' && pointers.size === 2){
+    const k = drag.d0 / pinchDist(); const [a,b] = [...pointers.values()];
+    view = {...drag.v0}; zoomAt(k, (a.x+b.x)/2, (a.y+b.y)/2); return;
+  }
+  if (drag.mode === 'pan'){
+    const r = svg.getBoundingClientRect(); const s = view.w / r.width;
+    const dx = (e.clientX - drag.c0.x) * s, dy = (e.clientY - drag.c0.y) * s;
+    if (Math.abs(dx)+Math.abs(dy) > 0.2) drag.moved = true;
+    view.x = drag.v0.x - dx; view.y = drag.v0.y - dy; applyView(); return;
+  }
+  const p = toWorld(e.clientX, e.clientY);
+  if (drag.mode === 'move'){
+    const dx = snap(p.x - drag.p0.x), dy = snap(p.y - drag.p0.y);
+    if (dx || dy) drag.moved = true;
+    for (const s of drag.start){ s.it.x = r1(s.x + dx); s.it.y = r1(s.y + dy); }
+    render();
+  } else if (drag.mode === 'box'){
+    gSel.textContent = '';
+    const x = Math.min(p.x, drag.p0.x), y = Math.min(p.y, drag.p0.y), w = Math.abs(p.x-drag.p0.x), h = Math.abs(p.y-drag.p0.y);
+    drag.r = {x,y,w,h};
+    el('rect', {x,y,width:w,height:h, fill:'rgba(11,125,140,.1)', stroke:'#0b7d8c', 'stroke-width':0.08, 'stroke-dasharray':'0.3 0.2'}, gSel);
+  }
+});
+function endPointer(e){
+  pointers.delete(e.pointerId);
+  if (!drag) return;
+  if (drag.mode === 'move' && drag.moved){ hist.push(drag.snapshot); if (hist.length>100) hist.shift(); fut = []; changed(); }
+  if (drag.mode === 'pan'){ svg.classList.remove('panning'); if (!drag.moved && sel.size){ sel.clear(); render(); } }
+  if (drag.mode === 'box' && drag.r){
+    const r = drag.r; gSel.textContent = '';
+    for (const it of items) if (it.x >= r.x && it.y >= r.y && it.x+it.w <= r.x+r.w && it.y+it.h <= r.y+r.h) sel.add(it.id);
+    render();
+  }
+  if (drag.mode === 'pinch' && pointers.size) { drag = null; return; }
+  drag = null;
+}
+svg.addEventListener('pointerup', endPointer);
+svg.addEventListener('pointercancel', endPointer);
+svg.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.deltaY > 0 ? 1.12 : 1/1.12, e.clientX, e.clientY); }, {passive:false});
+
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input,select,textarea')) return;
+  const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+  if (mod && k === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (mod && k === 'y'){ e.preventDefault(); redo(); return; }
+  if (mod && k === 'd'){ e.preventDefault(); dupSel(); return; }
+  if (mod && k === 'a'){ e.preventDefault(); sel = new Set(items.map(i=>i.id)); render(); return; }
+  if (k === 'delete' || k === 'backspace'){ e.preventDefault(); delSel(); return; }
+  if (k === 'r'){ rotSel(); return; }
+  if (k === 'f'){ faceSel(); return; }
+  if (k === 'escape'){ sel.clear(); render(); return; }
+  const arrows = {arrowleft:[-1,0], arrowright:[1,0], arrowup:[0,-1], arrowdown:[0,1]};
+  if (arrows[k] && sel.size){ e.preventDefault(); pushHist(); const s = e.shiftKey ? 0.5 : 0.1;
+    for (const it of selected()){ it.x = r1(it.x + arrows[k][0]*s); it.y = r1(it.y + arrows[k][1]*s); } changed(); }
+});
+
+/* ---------------- buttons ---------------- */
+$('bUndo').onclick = undo; $('bRedo').onclick = redo; $('bDel').onclick = delSel;
+$('bRot').onclick = rotSel; $('bFace').onclick = faceSel; $('bDup').onclick = dupSel;
+$('bRenum').onclick = async () => { if (await confirmBox('Đánh số lại tất cả ô theo vị trí (từ trên xuống, trái sang phải) trong từng nhóm?')) renumber(); };
+$('bRoute').onclick = e => { showRoute = !showRoute; e.currentTarget.classList.toggle('on', showRoute); render(); };
+$('bDims').onclick = e => { showDims = !showDims; e.currentTarget.classList.toggle('on', showDims); render(); };
+$('bMeasure').onclick = e => { showMeasure = !showMeasure; e.currentTarget.classList.toggle('on', showMeasure); render(); };
+$('bReset').onclick = async () => { if (await confirmBox('Quay về bản layout gốc (gian 1,5 × 2 m)? Những thay đổi hiện tại sẽ mất, nhưng vẫn bấm Hoàn tác được.')){ pushHist(); items = clone(original); sel.clear(); changed(); } };
+$('zIn').onclick = () => { const r = svg.getBoundingClientRect(); zoomAt(1/1.3, r.left+r.width/2, r.top+r.height/2); };
+$('zOut').onclick = () => { const r = svg.getBoundingClientRect(); zoomAt(1.3, r.left+r.width/2, r.top+r.height/2); };
+$('zFit').onclick = fit;
+document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => addItem(b.dataset.add));
+$('addCat').innerHTML = ['LN','TT','DA','KG','TG','GM','GL'].map(k => `<option value="${k}">${k} – ${CATS[k].n}</option>`).join('');
+window.addEventListener('resize', applyView);
+
+/* ---------------- export PNG ---------------- */
+let downloads = null;
+$('bPng').onclick = async () => {
+  if (!downloads){ setStatus('Trang này chưa tải file được ở đây', 'err'); return; }
+  setStatus('Đang tạo ảnh…');
+  try {
+    if (!bgDataURL){ const b = await (await fetch('base_plan.jpg')).blob();
+      bgDataURL = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }); }
+    const keepSel = sel; sel = new Set(); const keepM = showMeasure; showMeasure = false; render();
+    const c = svg.cloneNode(true);
+    sel = keepSel; showMeasure = keepM; render();
+    const PXW = 2554, PXH = Math.round(PXW * PLAN.H / PLAN.W);
+    c.setAttribute('viewBox', `0 0 ${PLAN.W} ${PLAN.H}`); c.setAttribute('width', PXW); c.setAttribute('height', PXH);
+    c.querySelector('#bgimg').setAttribute('href', bgDataURL);
+    c.querySelector('#selbox').textContent = '';
+    const s = new XMLSerializer().serializeToString(c);
+    const url = URL.createObjectURL(new Blob([s], {type:'image/svg+xml'}));
+    const img = new Image();
+    await new Promise((ok, bad) => { img.onload = ok; img.onerror = bad; img.src = url; });
+    const cv = document.createElement('canvas'); cv.width = PXW; cv.height = PXH;
+    const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,PXW,PXH); ctx.drawImage(img, 0, 0, PXW, PXH);
+    URL.revokeObjectURL(url);
+    let blob = null; try { blob = await new Promise(r => cv.toBlob(r, 'image/png')); } catch(e){}
+    const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    if (blob) await downloads.save({filename:`layout-cho-trong-nha-${stamp}.png`, data:blob});
+    else await downloads.save({filename:`layout-cho-trong-nha-${stamp}.svg`, data:s});
+    setStatus('Đã tải ảnh', 'ok');
+  } catch(e){
+    setStatus(e && e.code === 'declined' ? 'Đã hủy tải' : 'Tạo ảnh chưa được', e && e.code === 'declined' ? '' : 'err');
+  }
+};
+
+/* ---------------- boot ---------------- */
+async function boot(){
+  const data = await (await fetch('layout_data.json')).json();
+  PLAN = {W:data.W, H:data.H}; routes = data.routes; REF = data.ref || null;
+  original = data.items.map(i => ({id:uid(), ...i}));
+  const bg = $('bgimg'); bg.setAttribute('href', 'base_plan.jpg'); bg.setAttribute('width', PLAN.W); bg.setAttribute('height', PLAN.H);
+  let local = null; try { local = JSON.parse(localStorage.getItem(LSKEY) || 'null'); } catch(e){}
+  items = Array.isArray(local) && local.length ? local : clone(original);
+  fit(); render(); setStatus('Đang kết nối…');
+
+  const claude = window.claude;
+  if (!claude || !claude.use){ setStatus('Đang lưu trên máy này'); return; }
+  claude.use('downloads').then(d => { downloads = d; if (!d) $('bPng').style.display = 'none'; }).catch(() => { $('bPng').style.display = 'none'; });
+  try {
+    const user = await claude.use('user');
+    if (user && user.can){ try { const w = await user.can('data.write'); if (w === false) dbWritable = false; } catch(e){} }
+  } catch(e){}
+  let d = null; try { d = await claude.use('db'); } catch(e){}
+  if (!d){ setStatus('Đang lưu trên máy này'); return; }
+  db = d;
+  const timer = setTimeout(() => setStatus('Chưa kết nối được nơi lưu – vẫn giữ trên máy', 'err'), 10000);
+  try {
+    const snap = await db.doc(DOC).get(); clearTimeout(timer);
+    const body = snap.exists ? snap.data() : null;
+    if (body && Array.isArray(body.items) && body.items.length){
+      items = clone(body.items).map(i => ({...i, id: i.id || uid()})); sel.clear(); render();
+      try { localStorage.setItem(LSKEY, JSON.stringify(items)); } catch(e){}
+      setStatus(dbWritable ? 'Đã tải bản đã lưu' : 'Chỉ xem – không có quyền sửa', dbWritable ? 'ok' : '');
+    } else if (dbWritable) { await saveNow(); }
+    else setStatus('Chỉ xem');
+  } catch(e){ clearTimeout(timer); setStatus('Chưa kết nối được nơi lưu – vẫn giữ trên máy', 'err'); }
+}
+boot().catch(() => setStatus('Không tải được dữ liệu', 'err'));
+})();
+</script>
+</body>
+</html>
